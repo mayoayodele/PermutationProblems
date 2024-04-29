@@ -1,0 +1,51 @@
+import dimod
+import numpy as np
+from Problems.Problem_TSP import Problem_TSP
+from dwave.system import LeapHybridCQMSampler
+from cqm_methods import cqm_methods
+
+
+def main():
+    time_limit = 10
+    print('CQM 6 Results', time_limit)
+
+    for problem_name in [ # 'gr17', 'gr21', 'gr24', 'fri26','bayg29', 'bays29', 
+                         #'dantzig42', 'berlin52', 'brazil58',  'st70', 
+                         #'rd100', 
+                          'kroA100', 'kroB100', 'pr107',  'gr120'
+    ]:
+        path = 'Problems/TSP//' + problem_name+ '.tsp' 
+        tsp = Problem_TSP(path)
+        problem_size = tsp.problem_size
+        reduced_size = problem_size -1 #fix first city
+        distance = np.array(tsp.distance_matrix, dtype = 'int64')
+
+        model = [[dimod.Binary( 'position' + str(j) + 'city' + str(i) ) for i in range(reduced_size)] for j in range(reduced_size)]
+        cqm = dimod.ConstrainedQuadraticModel()
+
+
+        for i in range(reduced_size):
+            cqm.add_discrete(sum(model[i]), label=f'one-city-position{i+1}')
+
+        cqm.set_objective(cqm_methods.f_tsp(model, distance, reduced_size))
+
+        for j in range(reduced_size):
+            cqm.add_constraint(sum([model[i][j] for i in range(reduced_size)])   == 1, label = 'constraint_column' + str(j))
+
+
+        sampler = LeapHybridCQMSampler() 
+
+        n_runs = 20
+        energies = []
+        for i in range(n_runs):
+            sampleset = sampler.sample_cqm(cqm, time_limit=time_limit)  
+            feasible_sampleset = sampleset.filter(lambda row: row.is_feasible)  
+            energy = feasible_sampleset.first.energy
+            energies.append(energy)
+
+
+        print(problem_name, np.mean(energies), np.std(energies))
+
+
+if __name__ == "__main__":
+    main()
